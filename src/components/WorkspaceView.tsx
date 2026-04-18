@@ -139,6 +139,21 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
         </div>
       </header>
 
+      {/* Progress bar */}
+      {isProcessing && progress.total > 0 && (
+        <div className="border-b border-border bg-card px-4 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">
+              Deobfuscating files...
+            </span>
+            <span className="text-xs font-mono text-foreground">
+              {progress.current} / {progress.total}
+            </span>
+          </div>
+          <Progress value={(progress.current / progress.total) * 100} className="h-1.5" />
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-56 shrink-0 border-r border-border bg-sidebar overflow-hidden flex flex-col">
@@ -164,6 +179,18 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
               <div className="flex items-center justify-between border-b border-border bg-secondary/30 px-4 py-1.5">
                 <span className="font-mono text-xs text-muted-foreground truncate">{displayFile.path}</span>
                 <div className="flex items-center gap-1">
+                  {(displayFile.status === 'done' || displayFile.status === 'error') && displayFile.isLua && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => handleRetry(displayFile)}
+                      disabled={isProcessing}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Retry
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrev} disabled={currentIndex <= 0}>
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </Button>
@@ -199,8 +226,12 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
                   </div>
                 )}
                 {displayFile.status === 'error' && (
-                  <div className="flex flex-1 items-center justify-center text-destructive text-sm px-4 text-center">
-                    Error: {displayFile.error}
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm px-4 text-center">
+                    <div className="text-destructive">Error: {displayFile.error}</div>
+                    <Button size="sm" variant="outline" onClick={() => handleRetry(displayFile)} disabled={isProcessing}>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      Retry this file
+                    </Button>
                   </div>
                 )}
               </div>
