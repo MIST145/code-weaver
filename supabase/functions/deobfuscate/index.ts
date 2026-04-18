@@ -38,24 +38,33 @@ serve(async (req) => {
       userPrompt += `\n\nHere are clean files from the same resource for context on naming conventions:\n\n${cleanFilesContext}`;
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    // Auto-retry on 429 with exponential backoff so users don't need to babysit
+    let response: Response | null = null;
+    const maxAttempts = 4;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+      if (response.status !== 429) break;
+      const waitMs = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s, 16s
+      console.log(`Rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxAttempts})`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Please wait a moment and try again." }), {
+    if (!response || !response.ok) {
+      if (response?.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limited after multiple retries. Please wait a minute and try again." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
