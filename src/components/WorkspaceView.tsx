@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Play, Loader2, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Play, Loader2, RotateCcw, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { FileTree } from "./FileTree";
 import { CodePanel } from "./CodePanel";
-import { classifyFiles, deobfuscateFile } from "@/lib/deobfuscator";
+import { deobfuscateFile } from "@/lib/deobfuscator";
 import { downloadAsZip } from "@/lib/export";
 import { buildFileTree } from "@/lib/types";
 import type { FileEntry } from "@/lib/types";
@@ -20,6 +21,7 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
   const [files, setFiles] = useState<FileEntry[]>(() => classifyFilesSync(initialFiles));
   const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   function classifyFilesSync(fileList: FileEntry[]): FileEntry[] {
     return fileList.map(f => {
@@ -39,43 +41,45 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
   const navigableFiles = files.filter(f => f.isLua);
   const currentIndex = selectedFile ? navigableFiles.findIndex(f => f.path === selectedFile.path) : -1;
 
+  const processFile = async (file: FileEntry) => {
+    setFiles(prev => prev.map(f => f.path === file.path ? { ...f, status: 'processing' as const, error: undefined } : f));
+    try {
+      let result = '';
+      await deobfuscateFile(file, files, (chunk) => { result = chunk; });
+      setFiles(prev => prev.map(f =>
+        f.path === file.path ? { ...f, status: 'done' as const, deobfuscatedContent: result } : f
+      ));
+    } catch (err: any) {
+      setFiles(prev => prev.map(f =>
+        f.path === file.path ? { ...f, status: 'error' as const, error: err.message } : f
+      ));
+      toast({ title: `Error: ${file.name}`, description: err.message, variant: "destructive" });
+    }
+  };
+
   const handleDeobfuscateAll = async () => {
-    const toProcess = files.filter(f => f.status === 'obfuscated');
+    const toProcess = files.filter(f => f.status === 'obfuscated' || f.status === 'error');
     if (toProcess.length === 0) {
       toast({ title: "Nothing to process", description: "No obfuscated files found." });
       return;
     }
-
     setIsProcessing(true);
+    setProgress({ current: 0, total: toProcess.length });
 
-    for (const file of toProcess) {
-      // Mark as processing
-      setFiles(prev => prev.map(f => f.path === file.path ? { ...f, status: 'processing' as const } : f));
-
-      try {
-        let result = '';
-        await deobfuscateFile(
-          file,
-          files,
-          (chunk) => { result = chunk; },
-        );
-        setFiles(prev => prev.map(f =>
-          f.path === file.path
-            ? { ...f, status: 'done' as const, deobfuscatedContent: result }
-            : f
-        ));
-      } catch (err: any) {
-        setFiles(prev => prev.map(f =>
-          f.path === file.path
-            ? { ...f, status: 'error' as const, error: err.message }
-            : f
-        ));
-        toast({ title: `Error: ${file.name}`, description: err.message, variant: "destructive" });
-      }
+    for (let i = 0; i < toProcess.length; i++) {
+      await processFile(toProcess[i]);
+      setProgress({ current: i + 1, total: toProcess.length });
+      if (i < toProcess.length - 1) await new Promise(r => setTimeout(r, 800));
     }
 
     setIsProcessing(false);
-    toast({ title: "Processing complete", description: "All obfuscated files have been processed." });
+    toast({ title: "Processing complete", description: `${toProcess.length} files processed.` });
+  };
+
+  const handleRetry = async (file: FileEntry) => {
+    setIsProcessing(true);
+    await processFile(file);
+    setIsProcessing(false);
   };
 
   const handleDownload = () => downloadAsZip(files);
@@ -135,6 +139,21 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
         </div>
       </header>
 
+      {/* Progress bar */}
+      {isProcessing && progress.total > 0 && (
+        <div className="border-b border-border bg-card px-4 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">
+              Deobfuscating files...
+            </span>
+            <span className="text-xs font-mono text-foreground">
+              {progress.current} / {progress.total}
+            </span>
+          </div>
+          <Progress value={(progress.current / progress.total) * 100} className="h-1.5" />
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-56 shrink-0 border-r border-border bg-sidebar overflow-hidden flex flex-col">
@@ -160,6 +179,18 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
               <div className="flex items-center justify-between border-b border-border bg-secondary/30 px-4 py-1.5">
                 <span className="font-mono text-xs text-muted-foreground truncate">{displayFile.path}</span>
                 <div className="flex items-center gap-1">
+                  {(displayFile.status === 'done' || displayFile.status === 'error') && displayFile.isLua && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => handleRetry(displayFile)}
+                      disabled={isProcessing}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Retry
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handlePrev} disabled={currentIndex <= 0}>
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </Button>
@@ -195,8 +226,12 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
                   </div>
                 )}
                 {displayFile.status === 'error' && (
-                  <div className="flex flex-1 items-center justify-center text-destructive text-sm px-4 text-center">
-                    Error: {displayFile.error}
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm px-4 text-center">
+                    <div className="text-destructive">Error: {displayFile.error}</div>
+                    <Button size="sm" variant="outline" onClick={() => handleRetry(displayFile)} disabled={isProcessing}>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      Retry this file
+                    </Button>
                   </div>
                 )}
               </div>

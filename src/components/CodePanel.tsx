@@ -1,7 +1,12 @@
 import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/export";
+import hljs from "highlight.js/lib/core";
+import lua from "highlight.js/lib/languages/lua";
+import "highlight.js/styles/atom-one-dark.css";
+
+hljs.registerLanguage("lua", lua);
 
 interface CodePanelProps {
   title: string;
@@ -18,7 +23,14 @@ export function CodePanel({ title, code, showCopy = false }: CodePanelProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const lines = code.split('\n');
+  const highlightedLines = useMemo(() => {
+    try {
+      const html = hljs.highlight(code, { language: "lua", ignoreIllegals: true }).value;
+      return html.split("\n");
+    } catch {
+      return code.split("\n");
+    }
+  }, [code]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-md border border-border bg-code-bg">
@@ -30,16 +42,19 @@ export function CodePanel({ title, code, showCopy = false }: CodePanelProps) {
           </Button>
         )}
       </div>
-      <div className="code-panel flex-1 overflow-auto p-0">
+      <div className="code-panel flex-1 overflow-auto p-0 hljs">
         <table className="w-full border-collapse">
           <tbody>
-            {lines.map((line, i) => (
+            {highlightedLines.map((line, i) => (
               <tr key={i} className="hover:bg-code-highlight transition-colors">
                 <td className="select-none border-r border-border px-3 py-0 text-right align-top font-mono text-xs text-muted-foreground/50 w-12">
                   {i + 1}
                 </td>
                 <td className="px-3 py-0 align-top">
-                  <pre className="font-mono text-xs text-foreground whitespace-pre-wrap break-all">{line || ' '}</pre>
+                  <pre
+                    className="font-mono text-xs whitespace-pre-wrap break-all"
+                    dangerouslySetInnerHTML={{ __html: line || " " }}
+                  />
                 </td>
               </tr>
             ))}
