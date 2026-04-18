@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Play, Loader2, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Play, Loader2, RotateCcw, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { FileTree } from "./FileTree";
 import { CodePanel } from "./CodePanel";
-import { classifyFiles, deobfuscateFile } from "@/lib/deobfuscator";
+import { deobfuscateFile } from "@/lib/deobfuscator";
 import { downloadAsZip } from "@/lib/export";
 import { buildFileTree } from "@/lib/types";
 import type { FileEntry } from "@/lib/types";
@@ -20,6 +21,7 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
   const [files, setFiles] = useState<FileEntry[]>(() => classifyFilesSync(initialFiles));
   const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   function classifyFilesSync(fileList: FileEntry[]): FileEntry[] {
     return fileList.map(f => {
@@ -39,43 +41,45 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
   const navigableFiles = files.filter(f => f.isLua);
   const currentIndex = selectedFile ? navigableFiles.findIndex(f => f.path === selectedFile.path) : -1;
 
+  const processFile = async (file: FileEntry) => {
+    setFiles(prev => prev.map(f => f.path === file.path ? { ...f, status: 'processing' as const, error: undefined } : f));
+    try {
+      let result = '';
+      await deobfuscateFile(file, files, (chunk) => { result = chunk; });
+      setFiles(prev => prev.map(f =>
+        f.path === file.path ? { ...f, status: 'done' as const, deobfuscatedContent: result } : f
+      ));
+    } catch (err: any) {
+      setFiles(prev => prev.map(f =>
+        f.path === file.path ? { ...f, status: 'error' as const, error: err.message } : f
+      ));
+      toast({ title: `Error: ${file.name}`, description: err.message, variant: "destructive" });
+    }
+  };
+
   const handleDeobfuscateAll = async () => {
-    const toProcess = files.filter(f => f.status === 'obfuscated');
+    const toProcess = files.filter(f => f.status === 'obfuscated' || f.status === 'error');
     if (toProcess.length === 0) {
       toast({ title: "Nothing to process", description: "No obfuscated files found." });
       return;
     }
-
     setIsProcessing(true);
+    setProgress({ current: 0, total: toProcess.length });
 
-    for (const file of toProcess) {
-      // Mark as processing
-      setFiles(prev => prev.map(f => f.path === file.path ? { ...f, status: 'processing' as const } : f));
-
-      try {
-        let result = '';
-        await deobfuscateFile(
-          file,
-          files,
-          (chunk) => { result = chunk; },
-        );
-        setFiles(prev => prev.map(f =>
-          f.path === file.path
-            ? { ...f, status: 'done' as const, deobfuscatedContent: result }
-            : f
-        ));
-      } catch (err: any) {
-        setFiles(prev => prev.map(f =>
-          f.path === file.path
-            ? { ...f, status: 'error' as const, error: err.message }
-            : f
-        ));
-        toast({ title: `Error: ${file.name}`, description: err.message, variant: "destructive" });
-      }
+    for (let i = 0; i < toProcess.length; i++) {
+      await processFile(toProcess[i]);
+      setProgress({ current: i + 1, total: toProcess.length });
+      if (i < toProcess.length - 1) await new Promise(r => setTimeout(r, 800));
     }
 
     setIsProcessing(false);
-    toast({ title: "Processing complete", description: "All obfuscated files have been processed." });
+    toast({ title: "Processing complete", description: `${toProcess.length} files processed.` });
+  };
+
+  const handleRetry = async (file: FileEntry) => {
+    setIsProcessing(true);
+    await processFile(file);
+    setIsProcessing(false);
   };
 
   const handleDownload = () => downloadAsZip(files);
