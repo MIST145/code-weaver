@@ -35,6 +35,8 @@ export async function deobfuscateFile(
       fileContent: file.content,
       fileName: file.path,
       cleanFilesContext: cleanContext,
+      userApiKey: getStoredApiKey() || undefined,
+      model: getStoredModel(),
     },
   });
 
