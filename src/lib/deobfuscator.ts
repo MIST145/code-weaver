@@ -37,9 +37,24 @@ export async function deobfuscateFile(
     },
   });
 
-  if (error) throw new Error(error.message || 'Deobfuscation failed');
-  
-  // Non-streaming response
+  // supabase-js wraps non-2xx as FunctionsHttpError; extract the real message from the response body
+  if (error) {
+    let message = error.message || 'Deobfuscation failed';
+    try {
+      const ctx = (error as any).context;
+      if (ctx?.json) {
+        const body = await ctx.json();
+        if (body?.error) message = body.error;
+      } else if (ctx?.text) {
+        const body = JSON.parse(await ctx.text());
+        if (body?.error) message = body.error;
+      }
+    } catch {
+      // fall back to original message
+    }
+    throw new Error(message);
+  }
+
   if (data?.deobfuscatedCode) {
     onDelta(data.deobfuscatedCode);
     return data.deobfuscatedCode;
