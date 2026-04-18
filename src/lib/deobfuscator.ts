@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getStoredApiKey, getStoredModel } from "./aiSettings";
 import type { FileEntry } from "./types";
 
 export async function classifyFiles(files: FileEntry[]): Promise<FileEntry[]> {
@@ -34,6 +35,8 @@ export async function deobfuscateFile(
       fileContent: file.content,
       fileName: file.path,
       cleanFilesContext: cleanContext,
+      userApiKey: getStoredApiKey() || undefined,
+      model: getStoredModel(),
     },
   });
 

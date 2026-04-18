@@ -11,6 +11,7 @@ import { deobfuscateFile } from "@/lib/deobfuscator";
 import { downloadAsZip } from "@/lib/export";
 import { buildFileTree } from "@/lib/types";
 import type { FileEntry } from "@/lib/types";
+import { SettingsDialog } from "./SettingsDialog";
 
 interface WorkspaceViewProps {
   initialFiles: FileEntry[];
@@ -116,6 +117,7 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <SettingsDialog />
           <Button variant="ghost" size="sm" onClick={onReset}>
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
             New

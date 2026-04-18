@@ -25,64 +25,115 @@ Common FiveM patterns to recognize:
 - Event-driven architecture with RegisterNetEvent
 - Thread management with Citizen.CreateThread`;
 
+const LOVABLE_MODELS = new Set([
+  "google/gemini-3-flash-preview",
+  "google/gemini-3.1-pro-preview",
+  "google/gemini-2.5-pro",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+]);
+
+// Map our unified model IDs to Google's Gemini API model names
+const GEMINI_MODEL_MAP: Record<string, string> = {
+  "google/gemini-3-flash-preview": "gemini-3-flash-preview",
+  "google/gemini-3.1-pro-preview": "gemini-3.1-pro-preview",
+  "google/gemini-2.5-pro": "gemini-2.5-pro",
+  "google/gemini-2.5-flash": "gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+};
+
+async function callGeminiDirect(apiKey: string, model: string, userPrompt: string): Promise<string> {
+  const geminiModel = GEMINI_MODEL_MAP[model] || "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("Gemini API error:", res.status, t);
+    if (res.status === 429) throw new Error("Gemini rate limit hit. Wait a moment and retry.");
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      throw new Error("Invalid Gemini API key. Check your key in Settings.");
+    }
+    throw new Error(`Gemini API error (${res.status})`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") || "";
+  return text;
+}
+
+async function callLovableAI(model: string, userPrompt: string): Promise<{ ok: boolean; status: number; text: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: LOVABLE_MODELS.has(model) ? model : "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+    if (response.status !== 429) break;
+    const waitMs = 2000 * Math.pow(2, attempt);
+    console.log(`Lovable AI rate limited, retry in ${waitMs}ms`);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+
+  const text = await response!.text();
+  return { ok: response!.ok, status: response!.status, text };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { fileContent, fileName, cleanFilesContext } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const { fileContent, fileName, cleanFilesContext, userApiKey, model } = await req.json();
+    const selectedModel = model || "google/gemini-3-flash-preview";
 
     let userPrompt = `Deobfuscate this FiveM Lua file: ${fileName}\n\n\`\`\`lua\n${fileContent}\n\`\`\``;
     if (cleanFilesContext) {
       userPrompt += `\n\nHere are clean files from the same resource for context on naming conventions:\n\n${cleanFilesContext}`;
     }
 
-    // Auto-retry on 429 with exponential backoff so users don't need to babysit
-    let response: Response | null = null;
-    const maxAttempts = 4;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      });
-      if (response.status !== 429) break;
-      const waitMs = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s, 16s
-      console.log(`Rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxAttempts})`);
-      await new Promise((r) => setTimeout(r, waitMs));
+    let code = "";
+
+    if (userApiKey && typeof userApiKey === "string" && userApiKey.trim().length > 0) {
+      // Use user-provided Gemini key directly (their own free quota at aistudio.google.com)
+      code = await callGeminiDirect(userApiKey.trim(), selectedModel, userPrompt);
+    } else {
+      // Fall back to Lovable AI gateway
+      const result = await callLovableAI(selectedModel, userPrompt);
+      if (!result.ok) {
+        if (result.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limited after multiple retries. Please wait a minute and try again, or add a free Gemini API key in Settings." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (result.status === 402) {
+          return new Response(JSON.stringify({ error: "AI credits exhausted. Add a free Gemini API key in Settings (top-right) to keep going for free." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.error("AI error:", result.status, result.text);
+        throw new Error("AI processing failed");
+      }
+      const data = JSON.parse(result.text);
+      code = data.choices?.[0]?.message?.content || "";
     }
 
-    if (!response || !response.ok) {
-      if (response?.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited after multiple retries. Please wait a minute and try again." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits in Settings > Workspace > Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const text = await response.text();
-      console.error("AI error:", response.status, text);
-      throw new Error("AI processing failed");
-    }
-
-    const data = await response.json();
-    let code = data.choices?.[0]?.message?.content || "";
-    
     // Strip markdown code fences if present
-    code = code.replace(/^```lua\n?/i, '').replace(/\n?```$/i, '').trim();
+    code = code.replace(/^```lua\n?/i, "").replace(/\n?```$/i, "").trim();
 
     return new Response(JSON.stringify({ deobfuscatedCode: code }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
