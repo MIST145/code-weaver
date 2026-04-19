@@ -32,7 +32,7 @@ interface AnalyzeDialogProps {
   onAddFiles: (parts: SplitPart[], sourceFile: FileEntry) => void;
 }
 
-export function AnalyzeDialog({ files, currentFile, disabled }: AnalyzeDialogProps) {
+export function AnalyzeDialog({ files, currentFile, disabled, onAddFiles }: AnalyzeDialogProps) {
   const [open, setOpen] = useState(false);
   const [presetId, setPresetId] = useState("claude");
   const [tokenLimit, setTokenLimit] = useState(6000);
