@@ -135,7 +135,35 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
             )}
             Deobfuscate All
           </Button>
-          <AnalyzeDialog files={files} currentFile={selectedFile} disabled={isProcessing} />
+          <AnalyzeDialog
+            files={files}
+            currentFile={selectedFile}
+            disabled={isProcessing}
+            onAddFiles={(parts, sourceFile) => {
+              const dir = sourceFile.path.includes("/")
+                ? sourceFile.path.slice(0, sourceFile.path.lastIndexOf("/"))
+                : "";
+              const base = sourceFile.name.replace(/\.lua$/i, "");
+              const folder = `${dir ? dir + "/" : ""}${base}_split`;
+              const newEntries: FileEntry[] = parts.map((p) => {
+                const path = `${folder}/${p.name}`;
+                const matches = p.content.match(/\b[LA]\d+_\d+\b/g) || [];
+                const status: FileEntry["status"] = matches.length > 5 ? "obfuscated" : "clean";
+                return {
+                  path,
+                  name: p.name,
+                  content: p.content,
+                  isLua: true,
+                  status,
+                };
+              });
+              setFiles((prev) => {
+                const map = new Map(prev.map((f) => [f.path, f]));
+                for (const e of newEntries) map.set(e.path, e);
+                return Array.from(map.values());
+              });
+            }}
+          />
           <Button variant="outline" size="sm" onClick={handleDownload} disabled={doneCount === 0}>
             <Download className="h-3.5 w-3.5 mr-1" />
             ZIP

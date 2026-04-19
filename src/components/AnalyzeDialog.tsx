@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Sparkles, Download, Copy, AlertTriangle, FileCode } from "lucide-react";
+import { Sparkles, Download, Copy, AlertTriangle, FileCode, FolderInput } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   downloadPartsAsZip,
   downloadPart,
   type SplitResult,
+  type SplitPart,
 } from "@/lib/luaSplitter";
 import type { FileEntry } from "@/lib/types";
 
@@ -28,9 +29,10 @@ interface AnalyzeDialogProps {
   files: FileEntry[];
   currentFile: FileEntry | null;
   disabled?: boolean;
+  onAddFiles: (parts: SplitPart[], sourceFile: FileEntry) => void;
 }
 
-export function AnalyzeDialog({ files, currentFile, disabled }: AnalyzeDialogProps) {
+export function AnalyzeDialog({ files, currentFile, disabled, onAddFiles }: AnalyzeDialogProps) {
   const [open, setOpen] = useState(false);
   const [presetId, setPresetId] = useState("claude");
   const [tokenLimit, setTokenLimit] = useState(6000);
@@ -239,10 +241,27 @@ export function AnalyzeDialog({ files, currentFile, disabled }: AnalyzeDialogPro
                     </Badge>
                   )}
                 </div>
-                <Button size="sm" variant="outline" onClick={handleDownloadZip}>
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  ZIP
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (!result || !file) return;
+                      onAddFiles(result.parts, file);
+                      toast({
+                        title: "Added to workspace",
+                        description: `${result.parts.length} part${result.parts.length === 1 ? "" : "s"} ready to deobfuscate.`,
+                      });
+                      setOpen(false);
+                    }}
+                  >
+                    <FolderInput className="h-3.5 w-3.5 mr-1" />
+                    Add to workspace
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleDownloadZip}>
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    ZIP
+                  </Button>
+                </div>
               </div>
               <ScrollArea className="h-56 rounded-md border border-border">
                 <div className="divide-y divide-border">
