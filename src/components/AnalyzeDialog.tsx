@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Sparkles, Download, Copy, AlertTriangle, FileCode } from "lucide-react";
+import { Sparkles, Download, Copy, AlertTriangle, FileCode, FolderInput } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   downloadPartsAsZip,
   downloadPart,
   type SplitResult,
+  type SplitPart,
 } from "@/lib/luaSplitter";
 import type { FileEntry } from "@/lib/types";
 
@@ -28,6 +29,7 @@ interface AnalyzeDialogProps {
   files: FileEntry[];
   currentFile: FileEntry | null;
   disabled?: boolean;
+  onAddFiles: (parts: SplitPart[], sourceFile: FileEntry) => void;
 }
 
 export function AnalyzeDialog({ files, currentFile, disabled }: AnalyzeDialogProps) {
