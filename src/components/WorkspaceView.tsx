@@ -135,6 +135,7 @@ export function WorkspaceView({ initialFiles, onReset }: WorkspaceViewProps) {
             )}
             Deobfuscate All
           </Button>
+          <AnalyzeDialog files={files} currentFile={selectedFile} disabled={isProcessing} />
           <Button variant="outline" size="sm" onClick={handleDownload} disabled={doneCount === 0}>
             <Download className="h-3.5 w-3.5 mr-1" />
             ZIP
