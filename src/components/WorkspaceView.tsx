@@ -12,6 +12,7 @@ import { downloadAsZip } from "@/lib/export";
 import { buildFileTree } from "@/lib/types";
 import type { FileEntry } from "@/lib/types";
 import { SettingsDialog } from "./SettingsDialog";
+import { AnalyzeDialog } from "./AnalyzeDialog";
 
 interface WorkspaceViewProps {
   initialFiles: FileEntry[];
