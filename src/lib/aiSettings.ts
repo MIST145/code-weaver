@@ -1,3 +1,10 @@
+export const AI_PROVIDERS = [
+  { id: "lovable", label: "Built-in AI (Lovable, uses credits)" },
+  { id: "pollinations", label: "Pollinations.ai (free, no API key)" },
+  { id: "gemini", label: "Google Gemini (free, your API key)" },
+] as const;
+export type AIProviderId = typeof AI_PROVIDERS[number]["id"];
+
 export const AI_MODELS = [
   { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash (preview, fast)" },
   { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (preview, best)" },
@@ -5,11 +12,23 @@ export const AI_MODELS = [
   { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite (cheapest)" },
   { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro (high quality)" },
 ] as const;
-
 export type AIModelId = typeof AI_MODELS[number]["id"];
+
+// Pollinations text models (keyless). See https://text.pollinations.ai/models
+export const POLLINATIONS_MODELS = [
+  { id: "openai", label: "OpenAI GPT (default)" },
+  { id: "openai-large", label: "OpenAI GPT (large)" },
+  { id: "mistral", label: "Mistral" },
+  { id: "qwen-coder", label: "Qwen Coder (best for code)" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "llama", label: "Llama" },
+] as const;
+export type PollinationsModelId = typeof POLLINATIONS_MODELS[number]["id"];
 
 const KEY_STORAGE = "fivem-deobf:gemini-key";
 const MODEL_STORAGE = "fivem-deobf:model";
+const PROVIDER_STORAGE = "fivem-deobf:provider";
+const POLL_MODEL_STORAGE = "fivem-deobf:pollinations-model";
 
 export function getStoredApiKey(): string {
   try { return localStorage.getItem(KEY_STORAGE) || ""; } catch { return ""; }
@@ -26,4 +45,24 @@ export function getStoredModel(): AIModelId {
 }
 export function setStoredModel(model: AIModelId) {
   try { localStorage.setItem(MODEL_STORAGE, model); } catch {}
+}
+export function getStoredProvider(): AIProviderId {
+  try {
+    const p = localStorage.getItem(PROVIDER_STORAGE) as AIProviderId | null;
+    if (p && AI_PROVIDERS.some(x => x.id === p)) return p;
+  } catch {}
+  return "lovable";
+}
+export function setStoredProvider(p: AIProviderId) {
+  try { localStorage.setItem(PROVIDER_STORAGE, p); } catch {}
+}
+export function getStoredPollinationsModel(): PollinationsModelId {
+  try {
+    const m = localStorage.getItem(POLL_MODEL_STORAGE) as PollinationsModelId | null;
+    if (m && POLLINATIONS_MODELS.some(x => x.id === m)) return m;
+  } catch {}
+  return "qwen-coder";
+}
+export function setStoredPollinationsModel(m: PollinationsModelId) {
+  try { localStorage.setItem(POLL_MODEL_STORAGE, m); } catch {}
 }
