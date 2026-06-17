@@ -58,7 +58,7 @@ export function getStoredPollinationsModel(): PollinationsModelId {
     const m = localStorage.getItem(POLL_MODEL_STORAGE) as PollinationsModelId | null;
     if (m && POLLINATIONS_MODELS.some(x => x.id === m)) return m;
   } catch {}
-  return "qwen-coder";
+  return "openai-fast";
 }
 export function setStoredPollinationsModel(m: PollinationsModelId) {
   try { localStorage.setItem(POLL_MODEL_STORAGE, m); } catch {}
