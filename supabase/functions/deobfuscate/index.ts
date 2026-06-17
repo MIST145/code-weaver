@@ -94,12 +94,38 @@ async function callLovableAI(model: string, userPrompt: string): Promise<{ ok: b
   return { ok: response!.ok, status: response!.status, text };
 }
 
+async function callPollinations(model: string, userPrompt: string): Promise<string> {
+  // Pollinations OpenAI-compatible endpoint, no API key needed.
+  const res = await fetch("https://text.pollinations.ai/openai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: model || "qwen-coder",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      private: true,
+      referrer: "fivem-deobfuscator",
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("Pollinations error:", res.status, t);
+    if (res.status === 429) throw new Error("Pollinations is rate-limiting. Wait a moment and retry, or switch provider in Settings.");
+    throw new Error(`Pollinations error (${res.status}). Try again or switch provider in Settings.`);
+  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { fileContent, fileName, cleanFilesContext, userApiKey, model } = await req.json();
+    const { fileContent, fileName, cleanFilesContext, userApiKey, model, provider, pollinationsModel } = await req.json();
     const selectedModel = model || "google/gemini-3-flash-preview";
+    const selectedProvider = provider || (userApiKey ? "gemini" : "lovable");
 
     let userPrompt = `Deobfuscate this FiveM Lua file: ${fileName}\n\n\`\`\`lua\n${fileContent}\n\`\`\``;
     if (cleanFilesContext) {
@@ -108,20 +134,20 @@ serve(async (req) => {
 
     let code = "";
 
-    if (userApiKey && typeof userApiKey === "string" && userApiKey.trim().length > 0) {
-      // Use user-provided Gemini key directly (their own free quota at aistudio.google.com)
+    if (selectedProvider === "pollinations") {
+      code = await callPollinations(pollinationsModel || "qwen-coder", userPrompt);
+    } else if (selectedProvider === "gemini" && userApiKey && typeof userApiKey === "string" && userApiKey.trim().length > 0) {
       code = await callGeminiDirect(userApiKey.trim(), selectedModel, userPrompt);
     } else {
-      // Fall back to Lovable AI gateway
       const result = await callLovableAI(selectedModel, userPrompt);
       if (!result.ok) {
         if (result.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limited after multiple retries. Please wait a minute and try again, or add a free Gemini API key in Settings." }), {
+          return new Response(JSON.stringify({ error: "Rate limited. Switch provider to Pollinations.ai (free, no key) in Settings, or add a Gemini API key." }), {
             status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         if (result.status === 402) {
-          return new Response(JSON.stringify({ error: "AI credits exhausted. Add a free Gemini API key in Settings (top-right) to keep going for free." }), {
+          return new Response(JSON.stringify({ error: "AI credits exhausted. Switch provider to Pollinations.ai (free, no key) or add a free Gemini API key in Settings." }), {
             status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
