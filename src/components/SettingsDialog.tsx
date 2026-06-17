@@ -24,7 +24,7 @@ export function SettingsDialog() {
   const [provider, setProvider] = useState<AIProviderId>("lovable");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState<AIModelId>("google/gemini-3-flash-preview");
-  const [pollModel, setPollModel] = useState<PollinationsModelId>("qwen-coder");
+  const [pollModel, setPollModel] = useState<PollinationsModelId>("openai-fast");
   const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {

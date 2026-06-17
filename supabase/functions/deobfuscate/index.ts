@@ -100,7 +100,7 @@ async function callPollinations(model: string, userPrompt: string): Promise<stri
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: model || "qwen-coder",
+      model: model || "openai-fast",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
@@ -135,7 +135,7 @@ serve(async (req) => {
     let code = "";
 
     if (selectedProvider === "pollinations") {
-      code = await callPollinations(pollinationsModel || "qwen-coder", userPrompt);
+      code = await callPollinations(pollinationsModel || "openai-fast", userPrompt);
     } else if (selectedProvider === "gemini" && userApiKey && typeof userApiKey === "string" && userApiKey.trim().length > 0) {
       code = await callGeminiDirect(userApiKey.trim(), selectedModel, userPrompt);
     } else {
