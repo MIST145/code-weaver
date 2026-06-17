@@ -14,16 +14,13 @@ export const AI_MODELS = [
 ] as const;
 export type AIModelId = typeof AI_MODELS[number]["id"];
 
-// Pollinations text models (keyless). See https://text.pollinations.ai/models
+// Pollinations text models available anonymously (no key).
+// Only `openai-fast` (GPT-OSS 20B Reasoning) is currently available without auth.
 export const POLLINATIONS_MODELS = [
-  { id: "openai", label: "OpenAI GPT (default)" },
-  { id: "openai-large", label: "OpenAI GPT (large)" },
-  { id: "mistral", label: "Mistral" },
-  { id: "qwen-coder", label: "Qwen Coder (best for code)" },
-  { id: "deepseek", label: "DeepSeek" },
-  { id: "llama", label: "Llama" },
+  { id: "openai-fast", label: "GPT-OSS 20B (reasoning, free)" },
 ] as const;
 export type PollinationsModelId = typeof POLLINATIONS_MODELS[number]["id"];
+
 
 const KEY_STORAGE = "fivem-deobf:gemini-key";
 const MODEL_STORAGE = "fivem-deobf:model";
